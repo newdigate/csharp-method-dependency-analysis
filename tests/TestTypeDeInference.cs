@@ -49,23 +49,52 @@ public partial class NumberWang {
     }
 }
 ";
-        Console.WriteLine("digraph G {");
+        int counter = 0;
+        Dictionary<CyclicMethodAnalysisResult, int> map = new Dictionary<CyclicMethodAnalysisResult, int>();
         IDictionary<ISymbol, IList<ISymbol>> methodDependencies = _methodCallAnalizer.AnalizeMethodCalls(source);
+               Console.WriteLine("digraph G {");
         foreach (ISymbol methodSymbol in methodDependencies.Keys)
         {
             List<ISymbol> visitedSymbols = new List<ISymbol>();
             IList<ISymbol> rootDependenciesForMethod = methodDependencies[methodSymbol];
             IEnumerable<CyclicMethodAnalysisResult> analysis = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, rootDependenciesForMethod);
-            foreach (CyclicMethodAnalysisResult result in analysis) {
+            foreach (CyclicMethodAnalysisResult result in analysis.OrderBy( r => r.RecursionRoutes.Count() )) {
+                int index;
+                if (map.ContainsKey(result)) {
+                    index = map[result];
+                } else 
+                {
+                    index = Interlocked.Increment(ref counter);
+                    map[result] = index;
+                }
                 Console.Write($"\t \"{result.Symbol}\" -> ");
-                Console.WriteLine($"{string.Join(" -> ", result.RecursionRoutes.Select(v => $"\"{v.ToString()}\""))} [color={RandomColor()}]");
+                var filterRecursionRoutes =  new List<ISymbol>();
+                foreach(ISymbol symbol in result.RecursionRoutes) {
+                    filterRecursionRoutes.Add(symbol);
+                    if (analysis.Any( r => r.Symbol == symbol) )
+                        break;
+                }
+                Console.WriteLine($"{string.Join(" -> ", filterRecursionRoutes.Select(v => $"\"{v.ToString()}\""))} [color={RandomColor(result)}, label=\"{index}\"];");
             }
+            
+            foreach (CyclicMethodAnalysisResult result in analysis) {
+                int index = -1;
+                if (map.ContainsKey(result)) {
+                    index = map[result];
+                } 
+                Console.WriteLine($"\tnode [shape = circle, style=filled, color={RandomColor(result)}];");
+                Console.WriteLine($"\t {index} -> \"{result.Symbol}\" [color={RandomColor(result)}] ");
+            }
+            
         }
         Console.WriteLine("}");
     }
-    private static string RandomColor() {
-        string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", "deepskyblue", "goldenrod2", "burlywood2", "gold1", "greenyellow" };
-        return colors[new Random().Next() % colors.Length];
+    private static string RandomColor(CyclicMethodAnalysisResult result) {
+        string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", 
+                            "deepskyblue", "goldenrod2", "burlywood2", "gold1", "greenyellow", 
+                            "darkseagreen", "dodgerblue1", "thistle2","darkolivegreen3", "chocolate", 
+                            "turquoise3", "steelblue3","navy","darkseagreen4","blanchedalmond","lightskyblue1","aquamarine2","lemonchiffon"  };
+        return colors[result.GetHashCode() % colors.Length];
     }
 
     private static IEnumerable<CyclicMethodAnalysisResult> CheckForCyclicMethodCalls(ISymbol methodSymbol, IDictionary<ISymbol, IList<ISymbol>> methodDependencies, List<ISymbol> visitedSymbols, IList<ISymbol> rootDependenciesForMethod)
@@ -119,6 +148,10 @@ public class CyclicMethodAnalysisResult {
         _recursionRoute = recursionRoute;
     }
 
+    public override int GetHashCode()
+    {
+        return base.GetHashCode() + _methodSymbol.GetHashCode();
+    }
 
 
 }
