@@ -1,5 +1,6 @@
-# csharp-remove-type-inference
-remove type inference in c# files, projects and solutions
+# csharp-method-dependency-analysis
+* determine methods in a class which have recursive method call chains
+* TODO: group methods of a class by their dependencies... 
 
-* uses roslyn to parse, query and replace instances of `ForEachStatementSyntax` and `VariableDeclarationSyntax` which are using type-inference, `var`
+* uses roslyn to parse, query and analize instances of `InvocationExpressionSyntax`...
 * uses msbuild to load solutions and projects
