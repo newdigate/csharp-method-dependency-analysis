@@ -49,19 +49,19 @@ public partial class NumberWang {
     }
 }
 ";
-
-    IDictionary<ISymbol, IList<ISymbol>> methodDependencies = _methodCallAnalizer.AnalizeMethodCalls(source);
-    foreach (ISymbol methodSymbol in methodDependencies.Keys)
-    {
+        Console.WriteLine("digraph G {");
+        IDictionary<ISymbol, IList<ISymbol>> methodDependencies = _methodCallAnalizer.AnalizeMethodCalls(source);
+        foreach (ISymbol methodSymbol in methodDependencies.Keys)
+        {
             List<ISymbol> visitedSymbols = new List<ISymbol>();
             IList<ISymbol> rootDependenciesForMethod = methodDependencies[methodSymbol];
-
             IEnumerable<CyclicMethodAnalysisResult> analysis = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, rootDependenciesForMethod);
             foreach (CyclicMethodAnalysisResult result in analysis) {
-                Console.Write($"Cyclic dependency: {result.Symbol} -> ");
-                Console.WriteLine(string.Join(" -> ", result.RecursionRoutes.Select(v => v.ToString())));
+                Console.Write($"\t \"{result.Symbol}\" -> ");
+                Console.WriteLine(string.Join(" -> ", result.RecursionRoutes.Select(v => $"\"{v.ToString()}\"")));
             }
         }
+        Console.WriteLine("}");
     }
 
     private static IEnumerable<CyclicMethodAnalysisResult> CheckForCyclicMethodCalls(ISymbol methodSymbol, IDictionary<ISymbol, IList<ISymbol>> methodDependencies, List<ISymbol> visitedSymbols, IList<ISymbol> rootDependenciesForMethod)
