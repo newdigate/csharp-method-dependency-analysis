@@ -58,10 +58,14 @@ public partial class NumberWang {
             IEnumerable<CyclicMethodAnalysisResult> analysis = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, rootDependenciesForMethod);
             foreach (CyclicMethodAnalysisResult result in analysis) {
                 Console.Write($"\t \"{result.Symbol}\" -> ");
-                Console.WriteLine(string.Join(" -> ", result.RecursionRoutes.Select(v => $"\"{v.ToString()}\"")));
+                Console.WriteLine($"{string.Join(" -> ", result.RecursionRoutes.Select(v => $"\"{v.ToString()}\""))} [color={RandomColor()}]");
             }
         }
         Console.WriteLine("}");
+    }
+    private static string RandomColor() {
+        string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", "deepskyblue", "goldenrod2", "burlywood2", "gold1", "greenyellow" };
+        return colors[new Random().Next() % colors.Length];
     }
 
     private static IEnumerable<CyclicMethodAnalysisResult> CheckForCyclicMethodCalls(ISymbol methodSymbol, IDictionary<ISymbol, IList<ISymbol>> methodDependencies, List<ISymbol> visitedSymbols, IList<ISymbol> rootDependenciesForMethod)
