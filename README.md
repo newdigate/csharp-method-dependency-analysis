@@ -32,13 +32,21 @@ public partial class NumberWang {
 * output 
 ``` dot
 digraph G {
-	 "NumberWang.Wang()" -> "NumberWang.Wong()" -> "NumberWang.Wang()"
-	 "NumberWang.Wang()" -> "NumberWang.Weng()" -> "NumberWang.Wanganum()" -> "NumberWang.Wang()"
-	 "NumberWang.Wong()" -> "NumberWang.Wang()" -> "NumberWang.Wong()"
-	 "NumberWang.Weng()" -> "NumberWang.Wanganum()" -> "NumberWang.Wang()" -> "NumberWang.Wong()" -> "NumberWang.Wang()"
-	 "NumberWang.Weng()" -> "NumberWang.Wanganum()" -> "NumberWang.Wang()" -> "NumberWang.Weng()" 
-	 "NumberWang.Wanganum()" -> "NumberWang.Wang()" -> "NumberWang.Wong()" -> "NumberWang.Wang()"
-	 "NumberWang.Wanganum()" -> "NumberWang.Wang()" -> "NumberWang.Weng()" -> "NumberWang.Wanganum()"
+	 "NumberWang.Wang()" -> "NumberWang.Wong()" -> "NumberWang.Wang()" [color=green, label="1"];
+	 "NumberWang.Wang()" -> "NumberWang.Weng()" -> "NumberWang.Wanganum()" -> "NumberWang.Wang()" [color=grey, label="2"];
+	node [shape = circle, style=filled, color=green];
+	 1 -> "NumberWang.Wang()" [color=green] 
+	node [shape = circle, style=filled, color=grey];
+	 2 -> "NumberWang.Wang()" [color=grey] 
+	 "NumberWang.Wong()" -> "NumberWang.Wang()" -> "NumberWang.Wong()" [color=turquoise3, label="3"];
+	node [shape = circle, style=filled, color=turquoise3];
+	 3 -> "NumberWang.Wong()" [color=turquoise3] 
+	 "NumberWang.Weng()" -> "NumberWang.Wanganum()" -> "NumberWang.Wang()" -> "NumberWang.Weng()" [color=goldenrod2, label="4"];
+	node [shape = circle, style=filled, color=goldenrod2];
+	 4 -> "NumberWang.Weng()" [color=goldenrod2] 
+	 "NumberWang.Wanganum()" -> "NumberWang.Wang()" -> "NumberWang.Weng()" -> "NumberWang.Wanganum()" [color=deepskyblue, label="5"];
+	node [shape = circle, style=filled, color=deepskyblue];
+	 5 -> "NumberWang.Wanganum()" [color=deepskyblue] 
 }
 ```
 ![dotgraph](docs/graphviz.svg)
