@@ -4,7 +4,19 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace type_deinference;
 
-public class MethodCallAnalizer 
+public interface IMethodCallAnalizer {
+    IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCalls(string source);
+
+
+    IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCalls(Compilation compilation, IDictionary<SyntaxTree, CompilationUnitSyntax> trees);
+    
+
+    IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCalls(
+        IEnumerable<string> sourceIdentifiers, 
+        Func<string, string> getSourceFromIdentifier);
+}
+
+public class MethodCallAnalizer : IMethodCallAnalizer
 {
     private readonly IEnumerable<MetadataReference> references;
 
@@ -18,21 +30,34 @@ public class MethodCallAnalizer
         return AnalizeMethodCalls(new [] { string.Empty }, s => source);
     }
 
+/*
+    public IDictionary<ISymbol, IList<ISymbol>> Process(IDictionary<SyntaxTree, CompilationUnitSyntax> roots, Compilation compilation, Func<SyntaxTree, string> fnGetKeyForSyntaxTree) {
+        Dictionary<ISymbol, IList<ISymbol>> result = new Dictionary<ISymbol, IList<ISymbol>>();
+
+        return result;
+    }*/
+
     public IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCalls(
         IEnumerable<string> sourceIdentifiers, 
         Func<string, string> getSourceFromIdentifier)
     {
         Dictionary<string, string> sourceCodeByIdentifier = new Dictionary<string, string>();
-        foreach (string sourceIdentifier in sourceIdentifiers) {
-            sourceCodeByIdentifier.Add( sourceIdentifier, getSourceFromIdentifier(sourceIdentifier));
+        foreach (string sourceIdentifier in sourceIdentifiers)
+        {
+            sourceCodeByIdentifier.Add(sourceIdentifier, getSourceFromIdentifier(sourceIdentifier));
         }
 
-        CSharpCompilation compilation = 
+        CSharpCompilation compilation =
             CompileCSharp(
-                sourceCodeByIdentifier.Values, 
+                sourceCodeByIdentifier.Values,
                 out IDictionary<SyntaxTree, CompilationUnitSyntax> trees);
 
-        IEnumerable<ClassDeclarationSyntax> classDeclarationSyntaxes = 
+        return AnalizeMethodCalls(compilation, trees);
+    }
+
+    public IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCalls(Compilation compilation, IDictionary<SyntaxTree, CompilationUnitSyntax> trees)
+    {
+        IEnumerable<ClassDeclarationSyntax> classDeclarationSyntaxes =
             trees
                 .Keys
                 .SelectMany(
@@ -42,32 +67,35 @@ public class MethodCallAnalizer
                         .OfType<ClassDeclarationSyntax>()
                 );
 
-        IEnumerable<ClassDeclarationSyntax> partialClassDeclarationSyntaxes = 
+        IEnumerable<ClassDeclarationSyntax> partialClassDeclarationSyntaxes =
             classDeclarationSyntaxes
-                .Where( c => c
+                .Where(c => c
                                 .Modifiers
                                 .Any(
                                     m => m.IsKind(SyntaxKind.PartialKeyword)));
 
         IEnumerable<IGrouping<string, ClassDeclarationSyntax>> groupedPartialClasses =
-            partialClassDeclarationSyntaxes.GroupBy( partial => partial.Identifier.ToFullString() );
-        IEnumerable<MethodDeclarationSyntax> methods = partialClassDeclarationSyntaxes.SelectMany( cds => cds.DescendantNodes().OfType<MethodDeclarationSyntax>().Cast<MethodDeclarationSyntax>() ); 
+            partialClassDeclarationSyntaxes.GroupBy(partial => partial.Identifier.ToFullString());
+        IEnumerable<MethodDeclarationSyntax> methods = partialClassDeclarationSyntaxes.SelectMany(cds => cds.DescendantNodes().OfType<MethodDeclarationSyntax>().Cast<MethodDeclarationSyntax>());
 
-        IEnumerable<SemanticModel> models = trees.Keys.Select( key => compilation.GetSemanticModel(key) );
+        IEnumerable<SemanticModel> models = trees.Keys.Select(key => compilation.GetSemanticModel(key));
 
         IDictionary<ISymbol, IList<ISymbol>> dependencyTree = new Dictionary<ISymbol, IList<ISymbol>>();
 
-        foreach( MethodDeclarationSyntax methodDeclaration in methods) {
+        foreach (MethodDeclarationSyntax methodDeclaration in methods)
+        {
             SemanticModel model = compilation.GetSemanticModel(methodDeclaration.SyntaxTree);
 
-            ISymbol? methodSymbol =  model.GetDeclaredSymbol(methodDeclaration);
+            ISymbol? methodSymbol = model.GetDeclaredSymbol(methodDeclaration);
             //Console.WriteLine($"Method: {methodSymbol?.ToDisplayString()};");
             if (methodSymbol == null) continue;
 
-            IList<ISymbol> dependencies = null;
-            if (dependencyTree.ContainsKey(methodSymbol)) {
+            IList<ISymbol>? dependencies = null;
+            if (dependencyTree.ContainsKey(methodSymbol))
+            {
                 dependencies = dependencyTree[methodSymbol];
-            } else 
+            }
+            else
             {
                 dependencies = new List<ISymbol>();
                 dependencyTree[methodSymbol] = dependencies;
@@ -76,9 +104,11 @@ public class MethodCallAnalizer
             IEnumerable<InvocationExpressionSyntax>? invocations = methodDeclaration?.Body?.DescendantNodes().OfType<InvocationExpressionSyntax>().Cast<InvocationExpressionSyntax>();
             if (invocations != null)
             {
-                foreach (InvocationExpressionSyntax invocation in invocations) {
-                    IEnumerable<ISymbol> symbols =  model.GetMemberGroup(invocation.Expression);
-                    foreach (ISymbol symbol in symbols) {
+                foreach (InvocationExpressionSyntax invocation in invocations)
+                {
+                    IEnumerable<ISymbol> symbols = model.GetMemberGroup(invocation.Expression);
+                    foreach (ISymbol symbol in symbols)
+                    {
                         if (!dependencies.Contains(symbol))
                             dependencies.Add(symbol);
                         //Console.WriteLine($"Depedency: {symbol.ToDisplayString()};");
@@ -142,7 +172,9 @@ public class MethodCallAnalizer
                 .OfType<T>()
                 .Cast<T>();
     }
-    }
+
+
+}
 
 public class MethodDependencyNode {
     private readonly MethodInfo _method;

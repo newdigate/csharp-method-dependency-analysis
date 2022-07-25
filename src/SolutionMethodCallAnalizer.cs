@@ -5,47 +5,50 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 namespace type_deinference;
 
-public class SolutionDeInference {
-    private readonly ITypeDeInference _typeDeInference;
+public class SolutionMethodAnalysis {
+    private readonly IMethodCallAnalizer _typeDeInference;
 
-    public SolutionDeInference(ITypeDeInference typeDeInference)
+    public SolutionMethodAnalysis(IMethodCallAnalizer typeDeInference)
     {
         _typeDeInference = typeDeInference;
     }
-
-    public async Task<IDictionary<string, string>> RemoveTypeInferenceFromSolution(string solutionPath) {
+    
+    public IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCallsForSolution(string solutionPath) {
         EnsureMsBuildRegistration();
         using (MSBuildWorkspace workspace = MSBuildWorkspace.Create())
         {
             workspace.WorkspaceFailed += (sender, workspaceFailedArgs) => Console.WriteLine(workspaceFailedArgs.Diagnostic.Message);
-            Dictionary<string, string> result = new Dictionary<string, string>();
+            IDictionary<ISymbol, IList<ISymbol>> result = new Dictionary<ISymbol, IList<ISymbol>>();
 
-            Solution solution = await workspace.OpenSolutionAsync(solutionPath);
+            Solution solution = workspace.OpenSolutionAsync(solutionPath).Result;
             foreach (ProjectId projectId in workspace.CurrentSolution.GetProjectDependencyGraph().GetTopologicallySortedProjects()) {
                 Project? project = workspace.CurrentSolution.GetProject(projectId);
                 if (project == null) continue;
-                IDictionary<string, string> substitutions = await RemoveTypeInferenceFromProject(project);
+                IDictionary<ISymbol, IList<ISymbol>> substitutions =  AnalizeMethodCallsForProject(project);
                 result = result.Union(substitutions).ToDictionary(k => k.Key, v => v.Value);
             }
 
             return result;
         }    
     }
+    
 
-    public async Task<IDictionary<string, string>> RemoveTypeInferenceFromProject(string projectPath) {
+    public IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCallsForProject(string projectPath) {
         EnsureMsBuildRegistration();
         using(MSBuildWorkspace workspace = MSBuildWorkspace.Create()) 
         {
             workspace.WorkspaceFailed += (sender, workspaceFailedArgs) => Console.WriteLine(workspaceFailedArgs.Diagnostic.Message);
 
-            Project project = await workspace.OpenProjectAsync(projectPath);
-            return await RemoveTypeInferenceFromProject(project);
+            Project project = workspace.OpenProjectAsync(projectPath).Result;
+            return AnalizeMethodCallsForProject(project);
         }
-    }
-    public async Task<IDictionary<string, string>> RemoveTypeInferenceFromProject(Project project) {
-        Dictionary<string, string> empty = new Dictionary<string, string>();
+    } 
+
+    public IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCallsForProject(Project project) {
+
+        IDictionary<ISymbol, IList<ISymbol>> empty = new Dictionary<ISymbol, IList<ISymbol>>();
         
-        Compilation? compilation = await project.GetCompilationAsync();
+        Compilation? compilation = project.GetCompilationAsync().Result;
                
         if (compilation == null) return empty;
  
@@ -61,7 +64,7 @@ public class SolutionDeInference {
 
         return
             _typeDeInference
-                .Process(roots, compilation, tree => tree.FilePath);
+                .AnalizeMethodCalls(compilation, roots);
     }
 
     private void EnsureMsBuildRegistration() {

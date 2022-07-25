@@ -21,9 +21,17 @@ public class TestTypeDeInference {
                 MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(System.Linq.Enumerable).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(System.Console).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(SyntaxTree).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Microsoft.Build.Locator.MSBuildLocator).Assembly.Location),
                 MetadataReference.CreateFromFile(coreDir.FullName + Path.DirectorySeparatorChar + "System.Runtime.dll"),
             };
         _methodCallAnalizer = new MethodCallAnalizer(defaultReferences);
+    }
+
+    [Fact]
+    public void TestSolutionMethodAnalysis() {
+        SolutionMethodAnalysis solutionMethodAnalysis = new SolutionMethodAnalysis(_methodCallAnalizer);
+        var result = solutionMethodAnalysis.AnalizeMethodCallsForProject("/Users/nicholasnewdigate/Development/github/newdigate/csharp-method-dependency-analysis-2/src/type-deinference.csproj");
     }
 
     [Fact] 
@@ -58,7 +66,7 @@ public partial class NumberWang {
             List<ISymbol> visitedSymbols = new List<ISymbol>();
             IList<ISymbol> rootDependenciesForMethod = methodDependencies[methodSymbol];
             IEnumerable<CyclicMethodAnalysisResult> analysis = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, rootDependenciesForMethod);
-            foreach (CyclicMethodAnalysisResult result in analysis.OrderBy( r => r.RecursionRoutes.Count() )) {
+            foreach (CyclicMethodAnalysisResult result in analysis.Where( r => r.RecursionRoutes.Last() == r.Symbol).OrderBy( r => r.RecursionRoutes.Count() )) {
                 int index;
                 if (map.ContainsKey(result)) {
                     index = map[result];
@@ -68,16 +76,10 @@ public partial class NumberWang {
                     map[result] = index;
                 }
                 Console.Write($"\t \"{result.Symbol}\" -> ");
-                var filterRecursionRoutes =  new List<ISymbol>();
-                foreach(ISymbol symbol in result.RecursionRoutes) {
-                    filterRecursionRoutes.Add(symbol);
-                    if (analysis.Any( r => r.Symbol == symbol) )
-                        break;
-                }
-                Console.WriteLine($"{string.Join(" -> ", filterRecursionRoutes.Select(v => $"\"{v.ToString()}\""))} [color={RandomColor(result)}, label=\"{index}\"];");
+                Console.WriteLine($"{string.Join(" -> ", result.RecursionRoutes.Select(v => $"\"{v.ToString()}\""))} [color={RandomColor(result)}, label=\"{index}\"];");
             }
             
-            foreach (CyclicMethodAnalysisResult result in analysis) {
+            foreach (CyclicMethodAnalysisResult result in analysis.Where( r => r.RecursionRoutes.Last() == r.Symbol)) {
                 int index = -1;
                 if (map.ContainsKey(result)) {
                     index = map[result];
@@ -155,5 +157,6 @@ public class CyclicMethodAnalysisResult {
 
 
 }
+
 
 
