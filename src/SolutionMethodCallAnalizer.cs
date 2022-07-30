@@ -6,9 +6,9 @@ using Microsoft.CodeAnalysis.MSBuild;
 namespace type_deinference;
 
 public class SolutionMethodAnalysis {
-    private readonly IMethodCallAnalizer _typeDeInference;
+    private readonly IMethodCallAnalyzer _typeDeInference;
 
-    public SolutionMethodAnalysis(IMethodCallAnalizer typeDeInference)
+    public SolutionMethodAnalysis(IMethodCallAnalyzer typeDeInference)
     {
         _typeDeInference = typeDeInference;
     }
