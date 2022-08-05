@@ -58,6 +58,61 @@ public class TestTypeDeInference {
 
 
     [Fact]
+    public void TestSolutionInterfaceMethodAnalysis2() {
+        SolutionInterfaceMethodAnalysis solutionMethodAnalysis = new SolutionInterfaceMethodAnalysis(_classDependencyAnalyzer);
+        
+        Dictionary<string, string> interfaceToClassMapping = new Dictionary<string, string>();
+        interfaceToClassMapping["type_deinference.ICyclicMethodAnalyzer"] = "type_deinference.CyclicMethodAnalyzer";
+        interfaceToClassMapping["type_deinference.IMethodSymbolAnnotater"] = "type_deinference.MethodSymbolAnnotater";
+        interfaceToClassMapping["type_deinference.IRandomColorProvider"] = "type_deinference.RandomColorProvider";
+        interfaceToClassMapping["type_deinference.IMethodCallAnalyzer"] = "type_deinference.MethodCallAnalyzer";
+        interfaceToClassMapping["type_deinference.IClassDependencyAnalyzer"] = "type_deinference.ClassDependencyAnalyzer";
+        interfaceToClassMapping["type_deinference.ICSharpCompilationProvider"] = "type_deinference.CSharpCompilationProvider";
+
+        interfaceToClassMapping["type_deinference.ISymbolFinder"] = "type_deinference.SymbolFinder";
+
+        interfaceToClassMapping["type_deinference.ISymbolCache"] = "type_deinference.SymbolCache";
+
+        IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> classDependencies = solutionMethodAnalysis.AnalizeMethodCallsForSolution("/Users/nicholasnewdigate/Development/github/newdigate/csharp-method-dependency-analysis-2/MethodAnalysis.sln");
+
+        Console.WriteLine("digraph G {");
+        foreach (ISymbol classSymbol in classDependencies.Keys)
+        foreach (ISymbol methodSymbol in classDependencies[classSymbol].Keys)
+        {
+            List<ISymbol> visitedSymbols = new List<ISymbol>();
+            IDictionary<ISymbol, IList<ISymbol>> methodSymbolDependenciesForClass = classDependencies[classSymbol];
+
+            foreach(ISymbol methodWithDependencies in methodSymbolDependenciesForClass.Keys) {
+                IList<ISymbol> dependenciesForMethod = methodSymbolDependenciesForClass[methodWithDependencies];
+
+                foreach (ISymbol dependency in dependenciesForMethod) {
+                    if(dependency is IMethodSymbol dependencyMethodSymbol) {
+                        ISymbol containingType = dependencyMethodSymbol.ContainingType;
+                        ISymbol? implementingType = containingType;
+                        if (containingType is ITypeSymbol typeSymbol) {
+                            if (typeSymbol.TypeKind == TypeKind.Interface) {
+                                string nameOfInterfaceToMap = typeSymbol.ToString();
+                                if (interfaceToClassMapping.ContainsKey(nameOfInterfaceToMap)) {
+                                    string mappedClassName = interfaceToClassMapping[nameOfInterfaceToMap];
+                                    implementingType = classDependencies.Keys.FirstOrDefault( t => t.ToString() == mappedClassName );
+                                    if (implementingType != null) {
+                                        if (implementingType is ITypeSymbol implementingTypeSymbol) {
+                                            ISymbol? implementingMethodSymbol = implementingTypeSymbol.FindImplementationForInterfaceMember(dependencyMethodSymbol);
+                                            if (implementingMethodSymbol != null)
+                                                Console.WriteLine($"\"{_annotater.Annotate(methodSymbol)}\" -> \"{_annotater.Annotate(implementingMethodSymbol)}\"");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Console.WriteLine("}");
+    }
+
+    [Fact]
     public void TestInterfaceMethodAnalysis() {
         const string source = @"
 public interface IWang {
@@ -96,6 +151,7 @@ public class Wong : IWong {
         interfaceToClassMapping["IWang"] = "Wang";
         interfaceToClassMapping["IWong"] = "Wong";
 
+        
         IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> classDependencies = _classDependencyAnalyzer.AnalizeClassCalls(source);
         IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> implicitClassDependencies = new Dictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>>();
         Console.WriteLine("digraph G {");
