@@ -191,7 +191,7 @@ public class MethodCallAnalizer : IMethodCallAnalyzer
                     if (symbol.HasValue && symbol.Value.Symbol != null) {
                         if (!dependencies.Contains(symbol.Value.Symbol)) {
                             dependencies.Add(symbol.Value.Symbol);
-                            Console.WriteLine($"model.GetSymbolInfo({invocation.Expression}) returns {symbol.Value.Symbol}");
+                            //Console.WriteLine($"model.GetSymbolInfo({invocation.Expression}) returns {symbol.Value.Symbol}");
                         }
                     } else 
                     {
@@ -206,7 +206,7 @@ public class MethodCallAnalizer : IMethodCallAnalyzer
                             {
                                 if (!dependencies.Contains(symbol2)) {
                                     dependencies.Add(symbol2);
-                                    Console.WriteLine($"model.GetDeclaredSymbol({invocation.Expression}) returns {symbol2}");
+                                    //Console.WriteLine($"model.GetDeclaredSymbol({invocation.Expression}) returns {symbol2}");
                                 }                  
                             } else 
                                 Console.WriteLine($"could not find symbol for {invocation.Expression}...");

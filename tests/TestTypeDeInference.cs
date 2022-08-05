@@ -118,7 +118,13 @@ public class Wong : IWong {
                                 if (interfaceToClassMapping.ContainsKey(nameOfInterfaceToMap)) {
                                     string mappedClassName = interfaceToClassMapping[nameOfInterfaceToMap];
                                     implementingType = classDependencies.Keys.FirstOrDefault( t => t.Name == mappedClassName );
-                                    Console.WriteLine($"\"{_annotater.Annotate(methodSymbol)}\" -> \"{_annotater.Annotate(dependency)}\"");
+                                    if (implementingType != null) {
+                                        if (implementingType is ITypeSymbol implementingTypeSymbol) {
+                                            ISymbol? implementingMethodSymbol = implementingTypeSymbol.FindImplementationForInterfaceMember(dependencyMethodSymbol);
+                                            if (implementingMethodSymbol != null)
+                                                Console.WriteLine($"\"{_annotater.Annotate(methodSymbol)}\" -> \"{_annotater.Annotate(implementingMethodSymbol)}\"");
+                                        }
+                                    }
                                 }
                             }
                         }
