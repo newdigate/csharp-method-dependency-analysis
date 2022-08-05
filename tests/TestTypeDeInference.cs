@@ -11,6 +11,7 @@ public class TestTypeDeInference {
     private readonly ClassDependencyAnalyzer _classDependencyAnalyzer;
     
     private readonly IEnumerable<MetadataReference> defaultReferences;
+    private readonly IDictionary<string, ISymbol> _symbolCache = new Dictionary<string, ISymbol>();
 
     public TestTypeDeInference() {
         string assemlyLoc = typeof(Enumerable).GetTypeInfo().Assembly.Location;
@@ -25,11 +26,17 @@ public class TestTypeDeInference {
                 MetadataReference.CreateFromFile(typeof(System.Console).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(SyntaxTree).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(Microsoft.Build.Locator.MSBuildLocator).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(NuGet.Frameworks.CompatibilityTable).Assembly.Location),
                 MetadataReference.CreateFromFile(coreDir.FullName + Path.DirectorySeparatorChar + "System.Runtime.dll"),
             };
         ICSharpCompilationProvider compy = new CSharpCompilationProvider(defaultReferences);
-        _methodCallAnalizer = new MethodCallAnalizer(compy);
-        _classDependencyAnalyzer = new ClassDependencyAnalyzer(compy, _methodCallAnalizer);
+        _methodCallAnalizer = new MethodCallAnalizer(compy, new SymbolFinder( es => {
+            string fullName = es.WithoutTrivia().ToString();
+            if (_symbolCache.ContainsKey(fullName))
+                return _symbolCache[fullName];
+            return null;
+        } ) );
+        _classDependencyAnalyzer = new ClassDependencyAnalyzer(compy, _methodCallAnalizer, new SymbolCache(_symbolCache));
     }
 
     [Fact]
@@ -39,6 +46,15 @@ public class TestTypeDeInference {
         string dot = new DotGraphMethodCallAnalysisOutput().Process(result);
         Console.WriteLine(dot);
     }
+
+    [Fact]
+    public void TestSolutionInterfaceMethodAnalysis() {
+        SolutionInterfaceMethodAnalysis solutionMethodAnalysis = new SolutionInterfaceMethodAnalysis(_classDependencyAnalyzer);
+        IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> result = solutionMethodAnalysis.AnalizeMethodCallsForSolution("/Users/nicholasnewdigate/Development/github/newdigate/csharp-method-dependency-analysis-2/MethodAnalysis.sln");
+        string dot = new DotGraphClassDependencyAnalysisOutput().Process(result);
+        Console.WriteLine(dot);
+    }
+
 
     [Fact]
     public void TestInterfaceMethodAnalysis() {
@@ -85,7 +101,6 @@ public class Wong : IWong {
         foreach (ISymbol classSymbol in classDependencies.Keys)
         foreach (ISymbol methodSymbol in classDependencies[classSymbol].Keys)
         {
-            
             List<ISymbol> visitedSymbols = new List<ISymbol>();
             IDictionary<ISymbol, IList<ISymbol>> methodSymbolDependenciesForClass = classDependencies[classSymbol];
 
@@ -328,6 +343,73 @@ public class DotGraphMethodCallAnalysisOutput {
         {
             List<ISymbol> visitedSymbols = new List<ISymbol>();
             IList<ISymbol> rootDependenciesForMethod = symbolDependencies[methodSymbol];
+            foreach (ISymbol result in rootDependenciesForMethod) {
+                builder.AppendLine($"\t \"{Annotate(methodSymbol)}\" -> \"{Annotate(result)}\"");
+            }
+        }
+        builder.Append("}");
+        return builder.ToString();
+    }
+
+    private static IEnumerable<CyclicMethodAnalysisResult> CheckForCyclicMethodCalls(ISymbol methodSymbol, IDictionary<ISymbol, IList<ISymbol>> methodDependencies, List<ISymbol> visitedSymbols, IList<ISymbol> rootDependenciesForMethod)
+    {
+        //Console.WriteLine($"{methodSymbol}: {string.Join("->", visitedSymbols.Select( s => s.Name) )}");
+        List<ISymbol> originalSymbols = visitedSymbols;
+        List<CyclicMethodAnalysisResult> result = new List<CyclicMethodAnalysisResult>();
+        foreach (ISymbol dependency in rootDependenciesForMethod)
+        {
+            visitedSymbols = new List<ISymbol>(originalSymbols);
+            if (dependency == methodSymbol) {
+                visitedSymbols.Add(dependency);
+                CyclicMethodAnalysisResult recursion = new CyclicMethodAnalysisResult(methodSymbol, new List<ISymbol>(visitedSymbols));
+                result.Add(recursion);
+                return result;
+            } 
+            else if (!visitedSymbols.Contains(dependency))
+            {
+                visitedSymbols.Add(dependency);
+                if (methodDependencies.ContainsKey(dependency))
+                {
+                    IEnumerable<CyclicMethodAnalysisResult> recursive = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, methodDependencies[dependency] );
+                    if (recursive.Any()) {
+                        result.AddRange(recursive);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    private static string RandomColor(CyclicMethodAnalysisResult result) {
+        string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", 
+                            "deepskyblue", "goldenrod2", "burlywood2", "gold1", "greenyellow", 
+                            "darkseagreen", "dodgerblue1", "thistle2","darkolivegreen3", "chocolate", 
+                            "turquoise3", "steelblue3","navy","darkseagreen4","blanchedalmond","lightskyblue1","aquamarine2","lemonchiffon"  };
+        return colors[result.GetHashCode() % colors.Length];
+    }
+
+}
+
+public class DotGraphClassDependencyAnalysisOutput {
+    private string Annotate(ISymbol symbol) {
+        if (symbol is IMethodSymbol methodSymbol) {
+            string parameters = string.Join(",", methodSymbol.Parameters.Select( p => p.Type.Name ));
+            string typeparameters = methodSymbol.TypeParameters.Any()? $"<{string.Join(", ", methodSymbol.TypeParameters.Select( p => p.Name))}>" : string.Empty;
+            string result = $"{methodSymbol.ContainingType.Name}.{methodSymbol.Name}{typeparameters}({parameters})";
+            return result;
+        }
+        return "Not a method symbol...";
+    }
+
+    public string Process(IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> symbolDependencies) {
+        StringBuilder builder = new StringBuilder();
+        Dictionary<CyclicMethodAnalysisResult, int> map = new Dictionary<CyclicMethodAnalysisResult, int>();
+        builder.AppendLine("digraph G {");
+        foreach (ISymbol classSymbol in symbolDependencies.Keys)
+        foreach (ISymbol methodSymbol in symbolDependencies[classSymbol].Keys)
+        {
+            List<ISymbol> visitedSymbols = new List<ISymbol>();
+            IList<ISymbol> rootDependenciesForMethod = symbolDependencies[classSymbol][methodSymbol];
             foreach (ISymbol result in rootDependenciesForMethod) {
                 builder.AppendLine($"\t \"{Annotate(methodSymbol)}\" -> \"{Annotate(result)}\"");
             }

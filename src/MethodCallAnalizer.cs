@@ -69,13 +69,47 @@ public class CSharpCompilationProvider : ICSharpCompilationProvider {
 
 }
 
+public interface ISymbolFinder {
+    ISymbol? Find(ExpressionSyntax syntax);
+}
+
+public class SymbolFinder : ISymbolFinder {
+    private readonly Func<ExpressionSyntax, ISymbol?> _fnFindSymbol;
+
+    public SymbolFinder(Func<ExpressionSyntax, ISymbol?> fnFindSymbol)
+    {
+        _fnFindSymbol = fnFindSymbol;
+    }
+
+    public ISymbol? Find(ExpressionSyntax syntax) {
+        return _fnFindSymbol(syntax);
+    }
+}
+
+public interface ISymbolCache {
+    void Add(ISymbol symbol);
+}
+public class SymbolCache : ISymbolCache {
+    private readonly IDictionary<string, ISymbol> _symbolCache;
+
+    public SymbolCache(IDictionary<string, ISymbol> symbolCache)
+    {
+        _symbolCache = symbolCache;
+    }
+
+    public void Add(ISymbol symbol) {
+        _symbolCache[symbol.Name] = symbol;
+    }
+}
 public class MethodCallAnalizer : IMethodCallAnalyzer
 {
     private readonly ICSharpCompilationProvider _csharpCompilationProvider;
+    private readonly ISymbolFinder _symbolFinder;
 
-    public MethodCallAnalizer(ICSharpCompilationProvider csharpCompilationProvider)
+    public MethodCallAnalizer(ICSharpCompilationProvider csharpCompilationProvider, ISymbolFinder symbolFinder)
     {
         _csharpCompilationProvider = csharpCompilationProvider;
+        _symbolFinder = symbolFinder;
     }
 
     public IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCalls(string source)
@@ -123,7 +157,7 @@ public class MethodCallAnalizer : IMethodCallAnalyzer
 
         IEnumerable<MethodDeclarationSyntax> methods = classDeclarationSyntaxes.SelectMany(cds => cds.DescendantNodes().OfType<MethodDeclarationSyntax>().Cast<MethodDeclarationSyntax>());
 
-        IEnumerable<SemanticModel> models = trees.Keys.Select(key => compilation.GetSemanticModel(key));
+        //IEnumerable<SemanticModel> models = trees.Keys.Select(key => compilation.GetSemanticModel(key));
 
         IDictionary<ISymbol, IList<ISymbol>> dependencyTree = new Dictionary<ISymbol, IList<ISymbol>>();
 
@@ -151,14 +185,44 @@ public class MethodCallAnalizer : IMethodCallAnalyzer
             {
                 foreach (InvocationExpressionSyntax invocation in invocations)
                 {
-                    SymbolInfo symbol = model.GetSymbolInfo(invocation.Expression);
-                    //foreach (ISymbol symbol in symbols)
-                    //{
-                    if (symbol.Symbol != null)
-                        if (!dependencies.Contains(symbol.Symbol))
-                            dependencies.Add(symbol.Symbol);
-                        //Console.WriteLine($"Depedency: {symbol.ToDisplayString()};");
-                    //}
+                    SymbolInfo? symbol = 
+                         model.GetSymbolInfo(invocation.Expression); 
+
+                    if (symbol.HasValue && symbol.Value.Symbol != null) {
+                        if (!dependencies.Contains(symbol.Value.Symbol)) {
+                            dependencies.Add(symbol.Value.Symbol);
+                            Console.WriteLine($"model.GetSymbolInfo({invocation.Expression}) returns {symbol.Value.Symbol}");
+                        }
+                    } else 
+                    {
+                        if (invocation.Expression is MemberAccessExpressionSyntax memberAccessExpressionSyntax) {
+                            if (memberAccessExpressionSyntax.Expression is IdentifierNameSyntax memberIdentifierNameSyntax){
+                                string mem = memberIdentifierNameSyntax.ToFullString();
+                                SymbolInfo? identifierSymbol =  model.GetSymbolInfo(memberIdentifierNameSyntax);
+                            }
+                        } else {
+                            ISymbol? symbol2 = _symbolFinder.Find(invocation.Expression); 
+                            if (symbol2 != null)
+                            {
+                                if (!dependencies.Contains(symbol2)) {
+                                    dependencies.Add(symbol2);
+                                    Console.WriteLine($"model.GetDeclaredSymbol({invocation.Expression}) returns {symbol2}");
+                                }                  
+                            } else 
+                                Console.WriteLine($"could not find symbol for {invocation.Expression}...");
+                        }
+                        /*
+                        INamespaceSymbol? currentNamespace = compilation.GlobalNamespace;
+                        string[] tokens = invocation.Expression.ToFullString().Split(".");
+                        bool found = false;
+                        int i = 0;
+                        while (currentNamespace != null) {
+                            currentNamespace = currentNamespace.GetNamespaceMembers().FirstOrDefault( n => n.Name == tokens[i]);
+                            i ++;
+                            
+                        }
+                        */
+                    }                
                 }
             }
         }
@@ -198,10 +262,13 @@ public class ClassDependencyAnalyzer : IClassDependencyAnalyzer
 {
     private readonly ICSharpCompilationProvider _csharpCompilationProvider;
     private readonly IMethodCallAnalyzer _methodCallAnalyser;
-    public ClassDependencyAnalyzer(ICSharpCompilationProvider csharpCompilationProvider, IMethodCallAnalyzer methodCallAnalyser)
+    private readonly ISymbolCache _symbolCache;
+
+    public ClassDependencyAnalyzer(ICSharpCompilationProvider csharpCompilationProvider, IMethodCallAnalyzer methodCallAnalyser, ISymbolCache symbolCache)
     {
         _csharpCompilationProvider = csharpCompilationProvider;
         _methodCallAnalyser = methodCallAnalyser;
+        _symbolCache = symbolCache;
     }
 
     public IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> AnalizeClassCalls(string source)
@@ -252,6 +319,8 @@ public class ClassDependencyAnalyzer : IClassDependencyAnalyzer
 
             ISymbol? classSymbol = model.GetDeclaredSymbol(classDeclaration);
             if (classSymbol == null) continue;
+
+            _symbolCache.Add(classSymbol);
 
             IDictionary<ISymbol, IList<ISymbol>> methodSymbolReferencesPerClass = null;
             if (result.ContainsKey(classSymbol))
