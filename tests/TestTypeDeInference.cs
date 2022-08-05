@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
@@ -9,9 +8,11 @@ public class TestTypeDeInference {
 
     private readonly MethodCallAnalizer _methodCallAnalizer;
     private readonly ClassDependencyAnalyzer _classDependencyAnalyzer;
-    
     private readonly IEnumerable<MetadataReference> defaultReferences;
     private readonly IDictionary<string, ISymbol> _symbolCache = new Dictionary<string, ISymbol>();
+    private readonly IRandomColorProvider _randomColorProvider = new RandomColorProvider();
+    private readonly ICyclicMethodAnalyzer _cyclicMethodAnalyzer = new CyclicMethodAnalyzer();
+    private readonly IMethodSymbolAnnotater _annotater = new MethodSymbolAnnotater();
 
     public TestTypeDeInference() {
         string assemlyLoc = typeof(Enumerable).GetTypeInfo().Assembly.Location;
@@ -43,7 +44,7 @@ public class TestTypeDeInference {
     public void TestSolutionMethodAnalysis() {
         SolutionMethodAnalysis solutionMethodAnalysis = new SolutionMethodAnalysis(_methodCallAnalizer);
         IDictionary<ISymbol, IList<ISymbol>> result = solutionMethodAnalysis.AnalizeMethodCallsForSolution("/Users/nicholasnewdigate/Development/github/newdigate/csharp-method-dependency-analysis-2/MethodAnalysis.sln");
-        string dot = new DotGraphMethodCallAnalysisOutput().Process(result);
+        string dot = new DotGraphMethodCallAnalysisOutput(_annotater).Process(result);
         Console.WriteLine(dot);
     }
 
@@ -51,7 +52,7 @@ public class TestTypeDeInference {
     public void TestSolutionInterfaceMethodAnalysis() {
         SolutionInterfaceMethodAnalysis solutionMethodAnalysis = new SolutionInterfaceMethodAnalysis(_classDependencyAnalyzer);
         IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> result = solutionMethodAnalysis.AnalizeMethodCallsForSolution("/Users/nicholasnewdigate/Development/github/newdigate/csharp-method-dependency-analysis-2/MethodAnalysis.sln");
-        string dot = new DotGraphClassDependencyAnalysisOutput().Process(result);
+        string dot = new DotGraphClassDependencyAnalysisOutput(_annotater).Process(result);
         Console.WriteLine(dot);
     }
 
@@ -117,7 +118,7 @@ public class Wong : IWong {
                                 if (interfaceToClassMapping.ContainsKey(nameOfInterfaceToMap)) {
                                     string mappedClassName = interfaceToClassMapping[nameOfInterfaceToMap];
                                     implementingType = classDependencies.Keys.FirstOrDefault( t => t.Name == mappedClassName );
-                                    Console.WriteLine($"\"{classSymbol.Name}.{methodSymbol.Name}\" -> \"{implementingType}.{dependency.Name}\"");
+                                    Console.WriteLine($"\"{_annotater.Annotate(methodSymbol)}\" -> \"{_annotater.Annotate(dependency)}\"");
                                 }
                             }
                         }
@@ -162,7 +163,7 @@ public partial class NumberWang {
         {
             List<ISymbol> visitedSymbols = new List<ISymbol>();
             IList<ISymbol> rootDependenciesForMethod = methodDependencies[methodSymbol];
-            IEnumerable<CyclicMethodAnalysisResult> analysis = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, rootDependenciesForMethod);
+            IEnumerable<CyclicMethodAnalysisResult> analysis = _cyclicMethodAnalyzer.CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, rootDependenciesForMethod);
             foreach (CyclicMethodAnalysisResult result in analysis.Where( r => r.RecursionRoutes.Last() == r.Symbol).OrderBy( r => r.RecursionRoutes.Count() )) {
                 int index;
                 if (map.ContainsKey(result)) {
@@ -173,7 +174,7 @@ public partial class NumberWang {
                     map[result] = index;
                 }
                 Console.Write($"\t \"{result.Symbol}\" -> ");
-                Console.WriteLine($"{string.Join(" -> ", result.RecursionRoutes.Select(v => $"\"{v.ToString()}\""))} [color={RandomColor(result)}, label=\"{index}\"];");
+                Console.WriteLine($"{string.Join(" -> ", result.RecursionRoutes.Select(v => $"\"{v.ToString()}\""))} [color={_randomColorProvider.RandomColor(result)}, label=\"{index}\"];");
             }
             
             foreach (CyclicMethodAnalysisResult result in analysis.Where( r => r.RecursionRoutes.Last() == r.Symbol)) {
@@ -181,278 +182,12 @@ public partial class NumberWang {
                 if (map.ContainsKey(result)) {
                     index = map[result];
                 } 
-                Console.WriteLine($"\tnode [shape = circle, style=filled, color={RandomColor(result)}];");
-                Console.WriteLine($"\t {index} -> \"{result.Symbol}\" [color={RandomColor(result)}] ");
+                Console.WriteLine($"\tnode [shape = circle, style=filled, color={_randomColorProvider.RandomColor(result)}];");
+                Console.WriteLine($"\t {index} -> \"{result.Symbol}\" [color={_randomColorProvider.RandomColor(result)}] ");
             }
             
         }
         Console.WriteLine("}");
-    }
-    private static string RandomColor(CyclicMethodAnalysisResult result) {
-        string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", 
-                            "deepskyblue", "goldenrod2", "burlywood2", "gold1", "greenyellow", 
-                            "darkseagreen", "dodgerblue1", "thistle2","darkolivegreen3", "chocolate", 
-                            "turquoise3", "steelblue3","navy","darkseagreen4","blanchedalmond","lightskyblue1","aquamarine2","lemonchiffon"  };
-        return colors[result.GetHashCode() % colors.Length];
-    }
-
-    private static IEnumerable<CyclicMethodAnalysisResult> CheckForCyclicMethodCalls(ISymbol methodSymbol, IDictionary<ISymbol, IList<ISymbol>> methodDependencies, List<ISymbol> visitedSymbols, IList<ISymbol> rootDependenciesForMethod)
-    {
-        //Console.WriteLine($"{methodSymbol}: {string.Join("->", visitedSymbols.Select( s => s.Name) )}");
-        List<ISymbol> originalSymbols = visitedSymbols;
-        List<CyclicMethodAnalysisResult> result = new List<CyclicMethodAnalysisResult>();
-        foreach (ISymbol dependency in rootDependenciesForMethod)
-        {
-            visitedSymbols = new List<ISymbol>(originalSymbols);
-            if (dependency == methodSymbol) {
-                visitedSymbols.Add(dependency);
-                CyclicMethodAnalysisResult recursion = new CyclicMethodAnalysisResult(methodSymbol, new List<ISymbol>(visitedSymbols));
-                result.Add(recursion);
-                return result;
-            } 
-            else if (!visitedSymbols.Contains(dependency))
-            {
-                visitedSymbols.Add(dependency);
-                if (methodDependencies.ContainsKey(dependency))
-                {
-                    IEnumerable<CyclicMethodAnalysisResult> recursive = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, methodDependencies[dependency] );
-                    if (recursive.Any()) {
-                        result.AddRange(recursive);
-                        //break;
-                    }
-                }
-            }
-            else
-            {
-                /*
-                visitedSymbols.Add(dependency);
-                CyclicMethodAnalysisResult recursion = new CyclicMethodAnalysisResult(methodSymbol, new List<ISymbol>(visitedSymbols));
-                result.Add(recursion);
-                return result;
-                */
-            }
-        }
-        return result;
-    }
-}
-
-public class CyclicMethodAnalysisResult {
-
-    private readonly ISymbol _methodSymbol;
-    private readonly IList<ISymbol> _recursionRoute;
-    public IList<ISymbol> RecursionRoutes { get { return _recursionRoute;}}
-    public ISymbol Symbol { get { return _methodSymbol;}}
-    
-    public CyclicMethodAnalysisResult(ISymbol symbol, IList<ISymbol> recursionRoute)
-    {
-        _methodSymbol = symbol;
-        _recursionRoute = recursionRoute;
-    }
-
-    public override int GetHashCode()
-    {
-        return base.GetHashCode() + _methodSymbol.GetHashCode();
-    }
-
-
-}
-
-
-public class DotGraphRecursionAnalysisOutput {
-    private string Annotate(ISymbol symbol) {
-        return symbol.ToString().Replace(symbol.ContainingNamespace.ToString() + "." + symbol.ContainingType.Name + ".", "");
-    }
-
-    public string Process(IDictionary<ISymbol, IList<ISymbol>> symbolDependencies) {
-        StringBuilder builder = new StringBuilder();
-        int counter = 0;
-        Dictionary<CyclicMethodAnalysisResult, int> map = new Dictionary<CyclicMethodAnalysisResult, int>();
-        builder.AppendLine("digraph G {");
-        foreach (ISymbol methodSymbol in symbolDependencies.Keys)
-        {
-            List<ISymbol> visitedSymbols = new List<ISymbol>();
-            IList<ISymbol> rootDependenciesForMethod = symbolDependencies[methodSymbol];
-            IEnumerable<CyclicMethodAnalysisResult> analysis = CheckForCyclicMethodCalls(methodSymbol, symbolDependencies, visitedSymbols, rootDependenciesForMethod);
-            foreach (CyclicMethodAnalysisResult result in analysis.Where( r => r.RecursionRoutes.Last() == r.Symbol).OrderBy( r => r.RecursionRoutes.Count() )) {
-                int index;
-                if (map.ContainsKey(result)) {
-                    index = map[result];
-                } else 
-                {
-                    index = Interlocked.Increment(ref counter);
-                    map[result] = index;
-                }
-
-                builder.Append($"\t \"{Annotate(result.Symbol)}\" -> ");
-                builder.AppendLine($"{string.Join(" -> ", result.RecursionRoutes.Select(v => $"\"{Annotate(v)}\""))} [color={RandomColor(result)}, label=\"{index}\"];");
-            }
-        }
-        builder.Append("}");
-        return builder.ToString();
-    }
-
-    private static IEnumerable<CyclicMethodAnalysisResult> CheckForCyclicMethodCalls(ISymbol methodSymbol, IDictionary<ISymbol, IList<ISymbol>> methodDependencies, List<ISymbol> visitedSymbols, IList<ISymbol> rootDependenciesForMethod)
-    {
-        //Console.WriteLine($"{methodSymbol}: {string.Join("->", visitedSymbols.Select( s => s.Name) )}");
-        List<ISymbol> originalSymbols = visitedSymbols;
-        List<CyclicMethodAnalysisResult> result = new List<CyclicMethodAnalysisResult>();
-        foreach (ISymbol dependency in rootDependenciesForMethod)
-        {
-            visitedSymbols = new List<ISymbol>(originalSymbols);
-            if (dependency == methodSymbol) {
-                visitedSymbols.Add(dependency);
-                CyclicMethodAnalysisResult recursion = new CyclicMethodAnalysisResult(methodSymbol, new List<ISymbol>(visitedSymbols));
-                result.Add(recursion);
-                return result;
-            } 
-            else if (!visitedSymbols.Contains(dependency))
-            {
-                visitedSymbols.Add(dependency);
-                if (methodDependencies.ContainsKey(dependency))
-                {
-                    IEnumerable<CyclicMethodAnalysisResult> recursive = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, methodDependencies[dependency] );
-                    if (recursive.Any()) {
-                        result.AddRange(recursive);
-                    }
-                }
-            }
-        }
-        return result;
-    }
-
-    private static string RandomColor(CyclicMethodAnalysisResult result) {
-        string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", 
-                            "deepskyblue", "goldenrod2", "burlywood2", "gold1", "greenyellow", 
-                            "darkseagreen", "dodgerblue1", "thistle2","darkolivegreen3", "chocolate", 
-                            "turquoise3", "steelblue3","navy","darkseagreen4","blanchedalmond","lightskyblue1","aquamarine2","lemonchiffon"  };
-        return colors[result.GetHashCode() % colors.Length];
-    }
-
-}
-
-public class DotGraphMethodCallAnalysisOutput {
-    private string Annotate(ISymbol symbol) {
-        return symbol.ToString().Replace(symbol.ContainingNamespace.ToString() + "." + symbol.ContainingType.Name + ".", "");
-    }
-
-    public string Process(IDictionary<ISymbol, IList<ISymbol>> symbolDependencies) {
-        StringBuilder builder = new StringBuilder();
-        Dictionary<CyclicMethodAnalysisResult, int> map = new Dictionary<CyclicMethodAnalysisResult, int>();
-        builder.AppendLine("digraph G {");
-        foreach (ISymbol methodSymbol in symbolDependencies.Keys)
-        {
-            List<ISymbol> visitedSymbols = new List<ISymbol>();
-            IList<ISymbol> rootDependenciesForMethod = symbolDependencies[methodSymbol];
-            foreach (ISymbol result in rootDependenciesForMethod) {
-                builder.AppendLine($"\t \"{Annotate(methodSymbol)}\" -> \"{Annotate(result)}\"");
-            }
-        }
-        builder.Append("}");
-        return builder.ToString();
-    }
-
-    private static IEnumerable<CyclicMethodAnalysisResult> CheckForCyclicMethodCalls(ISymbol methodSymbol, IDictionary<ISymbol, IList<ISymbol>> methodDependencies, List<ISymbol> visitedSymbols, IList<ISymbol> rootDependenciesForMethod)
-    {
-        //Console.WriteLine($"{methodSymbol}: {string.Join("->", visitedSymbols.Select( s => s.Name) )}");
-        List<ISymbol> originalSymbols = visitedSymbols;
-        List<CyclicMethodAnalysisResult> result = new List<CyclicMethodAnalysisResult>();
-        foreach (ISymbol dependency in rootDependenciesForMethod)
-        {
-            visitedSymbols = new List<ISymbol>(originalSymbols);
-            if (dependency == methodSymbol) {
-                visitedSymbols.Add(dependency);
-                CyclicMethodAnalysisResult recursion = new CyclicMethodAnalysisResult(methodSymbol, new List<ISymbol>(visitedSymbols));
-                result.Add(recursion);
-                return result;
-            } 
-            else if (!visitedSymbols.Contains(dependency))
-            {
-                visitedSymbols.Add(dependency);
-                if (methodDependencies.ContainsKey(dependency))
-                {
-                    IEnumerable<CyclicMethodAnalysisResult> recursive = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, methodDependencies[dependency] );
-                    if (recursive.Any()) {
-                        result.AddRange(recursive);
-                    }
-                }
-            }
-        }
-        return result;
-    }
-
-    private static string RandomColor(CyclicMethodAnalysisResult result) {
-        string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", 
-                            "deepskyblue", "goldenrod2", "burlywood2", "gold1", "greenyellow", 
-                            "darkseagreen", "dodgerblue1", "thistle2","darkolivegreen3", "chocolate", 
-                            "turquoise3", "steelblue3","navy","darkseagreen4","blanchedalmond","lightskyblue1","aquamarine2","lemonchiffon"  };
-        return colors[result.GetHashCode() % colors.Length];
-    }
-
-}
-
-public class DotGraphClassDependencyAnalysisOutput {
-    private string Annotate(ISymbol symbol) {
-        if (symbol is IMethodSymbol methodSymbol) {
-            string parameters = string.Join(",", methodSymbol.Parameters.Select( p => p.Type.Name ));
-            string typeparameters = methodSymbol.TypeParameters.Any()? $"<{string.Join(", ", methodSymbol.TypeParameters.Select( p => p.Name))}>" : string.Empty;
-            string result = $"{methodSymbol.ContainingType.Name}.{methodSymbol.Name}{typeparameters}({parameters})";
-            return result;
-        }
-        return "Not a method symbol...";
-    }
-
-    public string Process(IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> symbolDependencies) {
-        StringBuilder builder = new StringBuilder();
-        Dictionary<CyclicMethodAnalysisResult, int> map = new Dictionary<CyclicMethodAnalysisResult, int>();
-        builder.AppendLine("digraph G {");
-        foreach (ISymbol classSymbol in symbolDependencies.Keys)
-        foreach (ISymbol methodSymbol in symbolDependencies[classSymbol].Keys)
-        {
-            List<ISymbol> visitedSymbols = new List<ISymbol>();
-            IList<ISymbol> rootDependenciesForMethod = symbolDependencies[classSymbol][methodSymbol];
-            foreach (ISymbol result in rootDependenciesForMethod) {
-                builder.AppendLine($"\t \"{Annotate(methodSymbol)}\" -> \"{Annotate(result)}\"");
-            }
-        }
-        builder.Append("}");
-        return builder.ToString();
-    }
-
-    private static IEnumerable<CyclicMethodAnalysisResult> CheckForCyclicMethodCalls(ISymbol methodSymbol, IDictionary<ISymbol, IList<ISymbol>> methodDependencies, List<ISymbol> visitedSymbols, IList<ISymbol> rootDependenciesForMethod)
-    {
-        //Console.WriteLine($"{methodSymbol}: {string.Join("->", visitedSymbols.Select( s => s.Name) )}");
-        List<ISymbol> originalSymbols = visitedSymbols;
-        List<CyclicMethodAnalysisResult> result = new List<CyclicMethodAnalysisResult>();
-        foreach (ISymbol dependency in rootDependenciesForMethod)
-        {
-            visitedSymbols = new List<ISymbol>(originalSymbols);
-            if (dependency == methodSymbol) {
-                visitedSymbols.Add(dependency);
-                CyclicMethodAnalysisResult recursion = new CyclicMethodAnalysisResult(methodSymbol, new List<ISymbol>(visitedSymbols));
-                result.Add(recursion);
-                return result;
-            } 
-            else if (!visitedSymbols.Contains(dependency))
-            {
-                visitedSymbols.Add(dependency);
-                if (methodDependencies.ContainsKey(dependency))
-                {
-                    IEnumerable<CyclicMethodAnalysisResult> recursive = CheckForCyclicMethodCalls(methodSymbol, methodDependencies, visitedSymbols, methodDependencies[dependency] );
-                    if (recursive.Any()) {
-                        result.AddRange(recursive);
-                    }
-                }
-            }
-        }
-        return result;
-    }
-
-    private static string RandomColor(CyclicMethodAnalysisResult result) {
-        string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", 
-                            "deepskyblue", "goldenrod2", "burlywood2", "gold1", "greenyellow", 
-                            "darkseagreen", "dodgerblue1", "thistle2","darkolivegreen3", "chocolate", 
-                            "turquoise3", "steelblue3","navy","darkseagreen4","blanchedalmond","lightskyblue1","aquamarine2","lemonchiffon"  };
-        return colors[result.GetHashCode() % colors.Length];
     }
 
 }
