@@ -1,5 +1,5 @@
 using Microsoft.CodeAnalysis;
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Core;
 
 public interface ISymbolCache {
     void Add(ISymbol symbol);

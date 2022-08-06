@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Core;
 
 public class SolutionMethodAnalysis {
     private readonly IMethodCallAnalyzer _typeDeInference;

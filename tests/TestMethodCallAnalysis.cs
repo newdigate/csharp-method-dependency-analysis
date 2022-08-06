@@ -1,10 +1,11 @@
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Newdigate.MethodCallAnalysis.Core;
 using Xunit;
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Tests;
 
-public class TestTypeDeInference {
+public class TestMethodCallAnalysis {
 
     private readonly MethodCallAnalizer _methodCallAnalizer;
     private readonly ClassDependencyAnalyzer _classDependencyAnalyzer;
@@ -14,7 +15,7 @@ public class TestTypeDeInference {
     private readonly ICyclicMethodAnalyzer _cyclicMethodAnalyzer = new CyclicMethodAnalyzer();
     private readonly IMethodSymbolAnnotater _annotater = new MethodSymbolAnnotater();
 
-    public TestTypeDeInference() {
+    public TestMethodCallAnalysis() {
         string assemlyLoc = typeof(Enumerable).GetTypeInfo().Assembly.Location;
         DirectoryInfo? coreDir = Directory.GetParent(assemlyLoc);
         if (coreDir == null)
@@ -43,7 +44,7 @@ public class TestTypeDeInference {
     [Fact]
     public void TestSolutionMethodAnalysis() {
         SolutionMethodAnalysis solutionMethodAnalysis = new SolutionMethodAnalysis(_methodCallAnalizer);
-        IDictionary<ISymbol, IList<ISymbol>> result = solutionMethodAnalysis.AnalizeMethodCallsForSolution("/Users/nicholasnewdigate/Development/github/newdigate/csharp-method-dependency-analysis-2/MethodAnalysis.sln");
+        IDictionary<ISymbol, IList<ISymbol>> result = solutionMethodAnalysis.AnalizeMethodCallsForSolution("/Users/Development/github/csharp-method-dependency-analysis/MethodAnalysis.sln");
         string dot = new DotGraphMethodCallAnalysisOutput(_annotater).Process(result);
         Console.WriteLine(dot);
     }

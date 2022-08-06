@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Core;
 
 public interface IMethodCallAnalyzer {
     IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCalls(string source);

@@ -1,6 +1,6 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Core;
 
 public class DotGraphClassDependencyAnalysisOutput {
     private readonly IMethodSymbolAnnotater _methodSymbolAnnotater;

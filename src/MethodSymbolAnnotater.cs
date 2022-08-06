@@ -1,5 +1,5 @@
 using Microsoft.CodeAnalysis;
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Core;
 
 public class MethodSymbolAnnotater : IMethodSymbolAnnotater{
     public string Annotate(ISymbol symbol) {

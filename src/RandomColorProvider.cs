@@ -1,4 +1,4 @@
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Core;
 
 public class RandomColorProvider : IRandomColorProvider {
     static string[] colors = {"green", "red", "blue", "grey", "yellow", "purple", "salmon2", 

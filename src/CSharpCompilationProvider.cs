@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Core;
 
 public class CSharpCompilationProvider : ICSharpCompilationProvider {
     private readonly IEnumerable<MetadataReference> references;

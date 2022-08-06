@@ -1,5 +1,5 @@
 using Microsoft.CodeAnalysis;
-namespace type_deinference;
+namespace Newdigate.MethodCallAnalysis.Core;
 
 public class SymbolCache : ISymbolCache {
     private readonly IDictionary<string, ISymbol> _symbolCache;
