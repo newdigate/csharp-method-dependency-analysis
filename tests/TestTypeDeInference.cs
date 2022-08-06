@@ -68,11 +68,8 @@ public class TestTypeDeInference {
         interfaceToClassMapping["type_deinference.IMethodCallAnalyzer"] = "type_deinference.MethodCallAnalyzer";
         interfaceToClassMapping["type_deinference.IClassDependencyAnalyzer"] = "type_deinference.ClassDependencyAnalyzer";
         interfaceToClassMapping["type_deinference.ICSharpCompilationProvider"] = "type_deinference.CSharpCompilationProvider";
-
         interfaceToClassMapping["type_deinference.ISymbolFinder"] = "type_deinference.SymbolFinder";
-
         interfaceToClassMapping["type_deinference.ISymbolCache"] = "type_deinference.SymbolCache";
-
         IDictionary<ISymbol, IDictionary<ISymbol, IList<ISymbol>>> classDependencies = solutionMethodAnalysis.AnalizeMethodCallsForSolution("/Users/nicholasnewdigate/Development/github/newdigate/csharp-method-dependency-analysis-2/MethodAnalysis.sln");
 
         Console.WriteLine("digraph G {");
@@ -86,6 +83,7 @@ public class TestTypeDeInference {
                 IList<ISymbol> dependenciesForMethod = methodSymbolDependenciesForClass[methodWithDependencies];
 
                 foreach (ISymbol dependency in dependenciesForMethod) {
+                    ISymbol? implementingSymbol = dependency;
                     if(dependency is IMethodSymbol dependencyMethodSymbol) {
                         ISymbol containingType = dependencyMethodSymbol.ContainingType;
                         ISymbol? implementingType = containingType;
@@ -99,13 +97,16 @@ public class TestTypeDeInference {
                                         if (implementingType is ITypeSymbol implementingTypeSymbol) {
                                             ISymbol? implementingMethodSymbol = implementingTypeSymbol.FindImplementationForInterfaceMember(dependencyMethodSymbol);
                                             if (implementingMethodSymbol != null)
-                                                Console.WriteLine($"\"{_annotater.Annotate(methodSymbol)}\" -> \"{_annotater.Annotate(implementingMethodSymbol)}\"");
+                                                implementingSymbol = implementingMethodSymbol;
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                    
+                    if (classDependencies.Values.Any( v => v.ContainsKey( implementingSymbol ) ))
+                        Console.WriteLine($"\"{_annotater.Annotate(methodSymbol)}\" -> \"{_annotater.Annotate(implementingSymbol)}\"");
                 }
             }
         }

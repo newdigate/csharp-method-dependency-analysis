@@ -117,13 +117,6 @@ public class MethodCallAnalizer : IMethodCallAnalyzer
         return AnalizeMethodCalls(new [] { string.Empty }, s => source);
     }
 
-/*
-    public IDictionary<ISymbol, IList<ISymbol>> Process(IDictionary<SyntaxTree, CompilationUnitSyntax> roots, Compilation compilation, Func<SyntaxTree, string> fnGetKeyForSyntaxTree) {
-        Dictionary<ISymbol, IList<ISymbol>> result = new Dictionary<ISymbol, IList<ISymbol>>();
-
-        return result;
-    }*/
-
     public IDictionary<ISymbol, IList<ISymbol>> AnalizeMethodCalls(
         IEnumerable<string> sourceIdentifiers, 
         Func<string, string> getSourceFromIdentifier)
@@ -156,17 +149,13 @@ public class MethodCallAnalizer : IMethodCallAnalyzer
                 );
 
         IEnumerable<MethodDeclarationSyntax> methods = classDeclarationSyntaxes.SelectMany(cds => cds.DescendantNodes().OfType<MethodDeclarationSyntax>().Cast<MethodDeclarationSyntax>());
-
-        //IEnumerable<SemanticModel> models = trees.Keys.Select(key => compilation.GetSemanticModel(key));
-
         IDictionary<ISymbol, IList<ISymbol>> dependencyTree = new Dictionary<ISymbol, IList<ISymbol>>();
-
         foreach (MethodDeclarationSyntax methodDeclaration in methods)
         {
             SemanticModel model = compilation.GetSemanticModel(methodDeclaration.SyntaxTree);
 
             ISymbol? methodSymbol = model.GetDeclaredSymbol(methodDeclaration);
-            //Console.WriteLine($"Method: {methodSymbol?.ToDisplayString()};");
+            Console.WriteLine($"Method: {methodSymbol?.ToDisplayString()};");
             if (methodSymbol == null) continue;
 
             IList<ISymbol>? dependencies = null;
@@ -185,6 +174,7 @@ public class MethodCallAnalizer : IMethodCallAnalyzer
             {
                 foreach (InvocationExpressionSyntax invocation in invocations)
                 {
+                    //Console.WriteLine($"\tInvocation: {invocation.ToString()};");
                     SymbolInfo? symbol = 
                          model.GetSymbolInfo(invocation.Expression); 
 
@@ -244,15 +234,6 @@ public class MethodCallAnalizer : IMethodCallAnalyzer
         }
        
         return null;
-    }
-
-    private IEnumerable<T> GetOfType<T>(SyntaxTree tree) {
-        return 
-            tree
-                .GetRoot()
-                .DescendantNodes()
-                .OfType<T>()
-                .Cast<T>();
     }
 
 
